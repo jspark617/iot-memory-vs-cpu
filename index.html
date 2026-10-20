@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IoT Memory vs CPU</title>
+
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column — header, category legend, full-width log–log scatter, notes, table view */
+:root{
+  --bg:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink-2:#52514e; --muted:#7d7b75;
+  --grid:#e1e0d9; --axis:#c3c2b7; --ring:rgba(11,11,11,.10); --band:rgba(42,120,214,.05); --boxfill:rgba(82,81,78,.045); --band2:rgba(235,104,52,.05);
+  --c-router:#2a78d6; --c-streaming:#eb6834; --c-speaker:#1baf7a; --c-light:#eda100;
+  --c-wear:#e87ba4; --c-thermo:#008300; --c-hub:#6250d6; --c-appl:#e34948;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink-2:#c3c2b7; --muted:#9a988f;
+  --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,.10); --band:rgba(57,135,229,.07); --boxfill:rgba(240,239,236,.04); --band2:rgba(217,89,38,.07);
+  --c-router:#3987e5; --c-streaming:#d95926; --c-speaker:#199e70; --c-light:#c98500;
+  --c-wear:#d55181; --c-thermo:#2f9a2f; --c-hub:#9085e9; --c-appl:#e66767; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink-2:#c3c2b7; --muted:#9a988f;
+  --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,.10); --band:rgba(57,135,229,.07); --boxfill:rgba(240,239,236,.04); --band2:rgba(217,89,38,.07);
+  --c-router:#3987e5; --c-streaming:#d95926; --c-speaker:#199e70; --c-light:#c98500;
+  --c-wear:#d55181; --c-thermo:#2f9a2f; --c-hub:#9085e9; --c-appl:#e66767; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 40px}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1{font-size:1.5rem;font-weight:600;margin:0;text-wrap:balance;letter-spacing:-.01em}
+.sub{margin:4px 0 0;color:var(--ink-2);max-width:72ch}
+.legend{display:flex;flex-wrap:wrap;gap:6px}
+.legend button{display:inline-flex;align-items:center;gap:6px;font:500 .82rem var(--sans);color:var(--ink);
+  background:var(--surface);border:1px solid var(--ring);border-radius:999px;padding:4px 10px 4px 6px;cursor:pointer}
+.legend button:hover{border-color:var(--axis)}
+.legend button:focus-visible{outline:2px solid var(--c-router);outline-offset:2px}
+.legend button[aria-pressed="true"]{border-color:var(--ink-2)}
+.legend .n{font-family:var(--mono);color:var(--muted);font-size:.75rem}
+.legend svg{width:18px;height:18px;flex:none}
+.legend svg+svg{margin-left:-3px}
+.legend .hint{color:var(--muted);font-size:.78rem;align-self:center;margin-left:4px}
+.card{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:12px 8px 6px;position:relative}
+#chart{display:block;width:100%;overflow:visible}
+.tick{font:400 11px var(--mono);fill:var(--muted);font-variant-numeric:tabular-nums}
+.axlab{font:500 12px var(--sans);fill:var(--ink-2)}
+.zone{font:500 11px var(--sans);fill:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.pt{cursor:pointer;transition:opacity .15s}
+.pt:focus{outline:none}
+.pt:focus-visible .disc,.pt.hot .disc{stroke-width:2.5}
+.dim{opacity:.13}
+#tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--ring);border-radius:8px;
+  box-shadow:0 6px 20px rgba(0,0,0,.14);padding:8px 10px;font-size:.8rem;max-width:280px;z-index:5}
+#tip .t1{font-weight:600;color:var(--ink)} #tip .t2{color:var(--muted);font-size:.74rem;margin-bottom:4px}
+#tip .row{display:flex;gap:8px;justify-content:space-between} #tip .k{color:var(--ink-2)}
+#tip .v{font-family:var(--mono);color:var(--ink);text-align:right}
+.notes{color:var(--ink-2);font-size:.86rem;max-width:80ch;display:flex;flex-direction:column;gap:6px}
+.notes p{margin:0}
+.notes b{color:var(--ink);font-weight:600}
+details{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:10px 14px}
+summary{cursor:pointer;font-weight:500;font-size:.9rem}
+.tbl{overflow-x:auto;margin-top:10px}
+table{border-collapse:collapse;font-size:.8rem;width:100%;min-width:640px}
+th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--grid);vertical-align:top}
+th{color:var(--muted);font-weight:500;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em}
+td.num{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+@media (prefers-reduced-motion:reduce){.pt{transition:none}}
+.dlab{font-family:var(--sans);font-weight:500;fill:var(--ink);paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round;pointer-events:none}
+.modes{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--ring);border-radius:9px;background:var(--surface);align-self:flex-start}
+.modes button{font:500 .85rem var(--sans);color:var(--ink-2);background:none;border:0;border-radius:6px;padding:5px 12px;cursor:pointer}
+.modes button[aria-selected="true"]{background:var(--ink);color:var(--surface)}
+.modes button:focus-visible{outline:2px solid var(--c-router);outline-offset:2px}
+.dsub{font-family:var(--mono);font-weight:400;fill:var(--ink-2)}
+.boxlab{font:600 10.5px var(--sans);fill:var(--ink-2);letter-spacing:.05em;text-transform:uppercase}
+.boxsub{font:400 10.5px var(--sans);fill:var(--muted)}
+</style>
+
+
+<style>[hidden]{display:none!important} img{max-width:100%}</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Memory vs CPU in IoT devices</h1>
+    <p class="sub">Sampled IoT devices. Note log axes. Some data (clearly) unavailable for some devices.</p>
+  </header>
+  <div class="modes" id="modes" role="tablist" aria-label="Chart view"><button type="button" id="m-all" role="tab"></button><button type="button" id="m-named" role="tab"></button></div>
+  <div class="legend" id="legend" role="group" aria-label="Highlight a category"></div>
+  <div class="card"><svg id="chart" role="img" aria-label="Scatter plot of RAM against aggregate CPU clock for IoT devices"></svg><div id="tip" hidden></div></div>
+  <div class="notes" id="notes"></div>
+  <details><summary>Data table (<span id="tcount"></span> devices)</summary><div class="tbl"><table id="tbl"><thead><tr><th>Category</th><th>Device</th><th>Shown in</th><th>CPU</th><th>RAM</th><th>Agg. clock</th><th>Confidence</th></tr></thead><tbody></tbody></table></div></details>
+</div>
+
+<script>
+const DATA = {"points":[{"cat":"router","vendor":"TP-Link","sku":"Archer AX21 (AX1800)","cpu":"2× MIPS 1004Kc @ 880 MHz","mhz":1760,"mb":128,"ram":"128 MB DDR","conf":"high","label":"Archer AX21","named":"TP-Link Archer AX21"},{"cat":"router","vendor":"TP-Link","sku":"Archer AX23 (AX1800)","cpu":"2× MIPS 1004Kc @ 880 MHz","mhz":1760,"mb":128,"ram":"128 MB DDR3","conf":"high","label":null,"named":null},{"cat":"router","vendor":"TP-Link","sku":"Archer AX55 (AX3000)","cpu":"2× Cortex-A53 @ 1.0 GHz","mhz":2000,"mb":512,"ram":"512 MB","conf":"high","label":null,"named":null},{"cat":"router","vendor":"TP-Link","sku":"Deco M4 (AC1200 mesh)","cpu":"2× MIPS 1004Kc @ 880 MHz","mhz":1760,"mb":256,"ram":"256 MB DDR","conf":"medium","label":null,"named":null},{"cat":"router","vendor":"TP-Link","sku":"Deco X55 (AX3000 mesh)","cpu":"2× Cortex-A53 @ 1.0 GHz","mhz":2000,"mb":512,"ram":"512 MB","conf":"medium","label":"Deco X55","named":null},{"cat":"router","vendor":"TP-Link","sku":"Archer BE550 (BE9300 tri-band Wi-Fi 7)","cpu":"4× Cortex-A73 @ 2.2 GHz (v1)","mhz":8800,"mb":1024,"ram":"1 GB","conf":"low","label":null,"named":null},{"cat":"router","vendor":"Xiaomi","sku":"Xiaomi Mi Router AX3000T","cpu":"2× Cortex-A53 @ 1.3 GHz","mhz":2600,"mb":256,"ram":"256 MB","conf":"high","label":null,"named":null},{"cat":"router","vendor":"Xiaomi","sku":"Redmi Router AX6000","cpu":"4× Cortex-A53 @ 2.0 GHz","mhz":8000,"mb":512,"ram":"512 MB DDR4","conf":"high","label":null,"named":null},{"cat":"router","vendor":"Xiaomi","sku":"Xiaomi/Redmi AX5400","cpu":"2× Cortex-A53 @ 1.0 GHz","mhz":2000,"mb":512,"ram":"512 MB DDR3L","conf":"high","label":null,"named":null},{"cat":"router","vendor":"Xiaomi","sku":"Xiaomi Router BE3600 2.5G","cpu":"4× Cortex-A53 @ 1.1 GHz","mhz":4400,"mb":256,"ram":"256 MB","conf":"medium","label":null,"named":null},{"cat":"router","vendor":"Xiaomi","sku":"Xiaomi Mesh System BE3600 Pro (router + satellites)","cpu":"4× Cortex-A53 @ 1.1 GHz","mhz":4400,"mb":512,"ram":"512 MB DDR3 (main router)","conf":"medium","label":null,"named":null},{"cat":"router","vendor":"Netgear","sku":"Orbi 750 Series (RBK752-757) tri-band Wi-Fi 6 mesh","cpu":"4× Cortex-A53 @ 2.2 GHz","mhz":8800,"mb":1024,"ram":"1 GB","conf":"high","label":null,"named":null},{"cat":"router","vendor":"Netgear","sku":"Orbi 850 Series (RBK852-855) tri-band Wi-Fi 6 mesh","cpu":"4× Cortex-A53 @ 2.2 GHz","mhz":8800,"mb":1024,"ram":"1 GB DDR4","conf":"high","label":null,"named":null},{"cat":"router","vendor":"Netgear","sku":"Orbi 350 Series (RBK352-355) dual-band Wi-Fi 6 mesh","cpu":"4× Cortex-A53 @ 1.8 GHz","mhz":7200,"mb":512,"ram":"512 MB DDR3","conf":"high","label":null,"named":null},{"cat":"router","vendor":"Netgear","sku":"Nighthawk RAX120 (AX6000) router","cpu":"4× Cortex-A53 @ 2.2 GHz","mhz":8800,"mb":1024,"ram":"1 GB DDR3","conf":"medium","label":null,"named":null},{"cat":"router","vendor":"Netgear","sku":"Nighthawk RS700S (BE19000 tri-band Wi-Fi 7 router)","cpu":"4× Broadcom B53 @ 2.6 GHz","mhz":10400,"mb":1024,"ram":"1 GB DDR4","conf":"high","label":null,"named":null},{"cat":"streaming","vendor":"Roku","sku":"Roku Ultra (2024)","cpu":"4× Cortex-A55 @ 1.7 GHz","mhz":6800,"mb":2048,"ram":"2 GB DDR4","conf":"high","label":null,"named":null},{"cat":"streaming","vendor":"Amazon","sku":"Fire TV Stick 4K Max (2nd Gen, 2023)","cpu":"4× Cortex-A55 @ 2.0 GHz","mhz":8000,"mb":2048,"ram":"2 GB LPDDR4","conf":"high","label":null,"named":null},{"cat":"streaming","vendor":"Amazon","sku":"Fire TV Stick 4K (2nd Gen, 2023) / Fire TV Stick 4K Plus (2025)","cpu":"4× Cortex-A55 @ 1.7 GHz","mhz":6800,"mb":2048,"ram":"2 GB LPDDR4","conf":"high","label":"Fire TV Stick 4K","named":"Fire TV Stick 4K"},{"cat":"streaming","vendor":"Amazon","sku":"Fire TV Stick HD (2024) / Fire TV Stick Lite","cpu":"4 cores @ 1.7 GHz","mhz":6800,"mb":1024,"ram":"1 GB DDR4","conf":"high","label":null,"named":null},{"cat":"streaming","vendor":"Amazon","sku":"Fire TV Cube (3rd Gen, 2022)","cpu":"4× A73 @ 2.2 + 4× A53 @ 2.0 GHz","mhz":16800,"mb":2048,"ram":"2 GB LPDDR4/4X","conf":"high","label":null,"named":null},{"cat":"streaming","vendor":"Apple","sku":"Apple TV 4K (3rd gen, Wi-Fi, 64 GB)","cpu":"A15: 5 cores @ ~2.9 GHz (est.)","mhz":14500,"mb":4096,"ram":"4 GB","conf":"medium","label":null,"named":null},{"cat":"streaming","vendor":"Apple","sku":"Apple TV 4K (3rd gen, Wi-Fi + Ethernet, 128 GB)","cpu":"A15: 5 cores @ ~2.9 GHz (est.)","mhz":14500,"mb":4096,"ram":"4 GB","conf":"medium","label":null,"named":null},{"cat":"streaming","vendor":"Google","sku":"Google TV Streamer (4K)","cpu":"4× Cortex-A55 @ 1.8 GHz","mhz":7200,"mb":4096,"ram":"4 GB","conf":"medium","label":null,"named":null},{"cat":"streaming","vendor":"Google","sku":"Chromecast with Google TV (4K)","cpu":"4× Cortex-A55 @ 1.9 GHz","mhz":7600,"mb":2048,"ram":"2 GB","conf":"medium","label":null,"named":null},{"cat":"streaming","vendor":"Google","sku":"Chromecast with Google TV (HD)","cpu":"4× Cortex-A35 @ 1.8 GHz","mhz":7200,"mb":1536.0,"ram":"1.5 GB","conf":"medium","label":null,"named":null},{"cat":"speaker","vendor":"Amazon","sku":"Echo Show 5 (3rd Gen)","cpu":"6× Cortex-A55 @ 2.0 GHz","mhz":12000,"mb":1024,"ram":"1 GB DDR4","conf":"high","label":null,"named":null},{"cat":"speaker","vendor":"Google","sku":"Google Nest Audio","cpu":"4× Cortex-A53 @ 1.8 GHz","mhz":7200,"mb":1024,"ram":"1 GB DDR3","conf":"high","label":null,"named":null},{"cat":"speaker","vendor":"Google","sku":"Google Nest Hub (2nd Gen)","cpu":"4× Cortex-A55 @ 1.9 GHz (SoC rating)","mhz":7600,"mb":2048,"ram":"2 GB DDR3L","conf":"high","label":null,"named":null},{"cat":"lighting","vendor":"Signify (Philips Hue / WiZ)","sku":"Philips Hue White and Color Ambiance A19/A60 bulb (Bluetooth + Zigbee)","cpu":"1× Cortex-M0+ @ 48 MHz","mhz":48,"mb":0.03125,"ram":"32 KB SRAM","conf":"low","label":"Hue color bulb","named":"Philips Hue color bulb"},{"cat":"lighting","vendor":"Signify (Philips Hue / WiZ)","sku":"Philips Hue Bridge Pro","cpu":"4× Cortex-A35 @ 1.7 GHz","mhz":6800,"mb":1024,"ram":"1 GB DDR4","conf":"medium","label":null,"named":null},{"cat":"lighting","vendor":"Signify (Philips Hue / WiZ)","sku":"WiZ Color A19/A21 Wi-Fi bulb (also WiZ 2m light strip)","cpu":"1× Xtensa LX6 @ 160 MHz","mhz":160,"mb":0.5078125,"ram":"520 KB SRAM","conf":"medium","label":null,"named":null},{"cat":"lighting","vendor":"Govee (Shenzhen Intellirocks)","sku":"Govee RGBIC LED Strip Lights (H6154 / H61541A1 controller)","cpu":"1× Cortex-M4F @ 125 MHz","mhz":125,"mb":0.25,"ram":"256 KB SRAM","conf":"medium","label":"Govee LED strip","named":null},{"cat":"lighting","vendor":"Govee (Shenzhen Intellirocks)","sku":"Govee Smart Recessed Lights 6in RGBWW","cpu":"1× Cortex-M33-class @ 100 MHz","mhz":100,"mb":0.25,"ram":"256 KB SRAM","conf":"medium","label":null,"named":null},{"cat":"lighting","vendor":"Govee (Shenzhen Intellirocks)","sku":"Govee Wi-Fi + BT smart bulb E27 RGBWW","cpu":"1× Cortex-M4F @ 125 MHz","mhz":125,"mb":0.25,"ram":"256 KB SRAM","conf":"medium","label":null,"named":null},{"cat":"lighting","vendor":"TP-Link (Kasa / Tapo)","sku":"Tapo L900 RGB Light Strip (5 m)","cpu":"1× Cortex-M33-class @ 100 MHz","mhz":100,"mb":0.25,"ram":"256 KB SRAM","conf":"high","label":null,"named":null},{"cat":"plug","vendor":"TP-Link (Kasa / Tapo)","sku":"Kasa Smart Wi-Fi Plug Mini","cpu":"1× Cortex-M33-class @ 100 MHz (v5)","mhz":100,"mb":0.25,"ram":"256 KB SRAM (v5)","conf":"medium","label":"Kasa Plug Mini","named":"Kasa Smart Plug Mini"},{"cat":"plug","vendor":"TP-Link (Kasa / Tapo)","sku":"Tapo P110M Mini Smart Wi-Fi Plug with Energy Monitoring (Matter)","cpu":"1× Cortex-M33-class @ 100 MHz","mhz":100,"mb":0.25,"ram":"256 KB SRAM","conf":"high","label":null,"named":null},{"cat":"plug","vendor":"TP-Link (Kasa / Tapo)","sku":"Tapo P100 / P105 Mini Smart Wi-Fi Plug","cpu":"1× Cortex-M33-class @ 100 MHz","mhz":100,"mb":0.25,"ram":"256 KB SRAM","conf":"high","label":"Tapo P100","named":null},{"cat":"plug","vendor":"TP-Link (Kasa / Tapo)","sku":"Kasa Smart Wi-Fi Light Switch, Single Pole","cpu":"1× Cortex-M33-class @ 100 MHz","mhz":100,"mb":0.25,"ram":"256 KB SRAM","conf":"medium","label":null,"named":null},{"cat":"thermostat","vendor":"Google Nest","sku":"Nest Learning Thermostat (4th gen)","cpu":"1× Cortex-M7 @ 1.0 GHz","mhz":1000,"mb":64,"ram":"64 MB SDRAM","conf":"high","label":"Nest Learning","named":"Nest Learning Thermostat"},{"cat":"thermostat","vendor":"Google Nest","sku":"Nest Thermostat (2020)","cpu":"1× Cortex-M7 @ 600 MHz","mhz":600,"mb":1,"ram":"1 MB SRAM","conf":"high","label":"Nest Thermostat","named":null},{"cat":"thermostat","vendor":"Google Nest","sku":"Nest Thermostat E","cpu":"1× Cortex-A7 @ 528 MHz","mhz":528,"mb":128,"ram":"128 MB LPDDR2","conf":"high","label":null,"named":null},{"cat":"thermostat","vendor":"Honeywell Home (Resideo)","sku":"Honeywell Home T9 Smart Thermostat","cpu":"1× Cortex-M7 @ 528 MHz","mhz":528,"mb":0.5,"ram":"512 KB SRAM","conf":"high","label":null,"named":null},{"cat":"thermostat","vendor":"Honeywell Home (Resideo)","sku":"Honeywell Home T5 / T5+ Smart Thermostat","cpu":"1× RXv1 @ 32 MHz","mhz":32,"mb":0.0625,"ram":"64 KB SRAM","conf":"high","label":null,"named":null},{"cat":"thermostat","vendor":"ecobee (Generac)","sku":"ecobee3 lite","cpu":"4× Cortex-A35 @ 1.5 GHz","mhz":6000,"mb":512,"ram":"512 MB DDR4","conf":"low","label":null,"named":null},{"cat":"thermostat","vendor":"Amazon","sku":"Amazon Smart Thermostat","cpu":"1× Cortex-M7 @ 400 MHz","mhz":400,"mb":0.125,"ram":"128 KB SRAM (main MCU)","conf":"high","label":null,"named":null},{"cat":"lock","vendor":"Schlage (Allegion)","sku":"Schlage Encode Smart Wi-Fi Deadbolt","cpu":"1× Cortex-M3 @ 48 MHz","mhz":48,"mb":0.01953125,"ram":"20 KB SRAM","conf":"medium","label":"Schlage Encode","named":"Schlage Encode lock"},{"cat":"hub","vendor":"Samsung SmartThings","sku":"SmartThings Station","cpu":"1× Cortex-A7 @ 528 MHz","mhz":528,"mb":512,"ram":"512 MB DDR3","conf":"high","label":"SmartThings Station","named":null},{"cat":"hub","vendor":"Samsung SmartThings","sku":"Aeotec Smart Home Hub (SmartThings Hub v3 successor)","cpu":"1× Cortex-A7 @ 528 MHz","mhz":528,"mb":256,"ram":"256 MB DDR","conf":"medium","label":null,"named":null},{"cat":"hub","vendor":"Aqara","sku":"Aqara Hub M3","cpu":"2× Cortex-A7 @ 1.0 GHz","mhz":2000,"mb":128,"ram":"128 MB DDR3","conf":"medium","label":null,"named":null},{"cat":"hub","vendor":"Home Assistant (Nabu Casa)","sku":"Home Assistant Green","cpu":"4× Cortex-A55 @ 1.8 GHz","mhz":7200,"mb":4096,"ram":"4 GB LPDDR4X","conf":"high","label":"HA Green","named":null},{"cat":"hub","vendor":"Home Assistant (Nabu Casa)","sku":"Home Assistant Connect ZBT-1 (formerly SkyConnect)","cpu":"1× Cortex-M33 @ 80 MHz","mhz":80,"mb":0.09375,"ram":"96 KB SRAM","conf":"medium","label":null,"named":null},{"cat":"watch","vendor":"Samsung","sku":"Samsung Galaxy Watch8","cpu":"1× A78 @ 1.6 + 4× A55 @ 1.5 GHz","mhz":7600,"mb":2048,"ram":"2 GB","conf":"high","label":"Galaxy Watch8","named":"Galaxy Watch8"},{"cat":"band","vendor":"Huawei","sku":"Huawei Band 9","cpu":"1× Cortex-M4F @ 48 MHz","mhz":48,"mb":0.75,"ram":"768 KB SRAM","conf":"high","label":"Huawei Band 9","named":null},{"cat":"band","vendor":"Samsung","sku":"Samsung Galaxy Ring","cpu":"2× Cortex-M33 @ 128 + 64 MHz","mhz":192,"mb":0.5625,"ram":"512 + 64 KB SRAM","conf":"medium","label":"Galaxy Ring","named":null},{"cat":"mower","vendor":"Ecovacs","sku":"Ecovacs GOAT A1600 RTK (2025 A/O series)","cpu":"8× Cortex-A55 @ 1.5 GHz","mhz":12000,"mb":4096,"ram":"4 GB LPDDR4X","conf":"high","label":null,"named":null},{"cat":"kitchen","vendor":"LG Electronics","sku":"LG 6.3 cu. ft. Smart Induction Slide-In Range with InstaView, ProBake Convection, Air Fry, Air Sous Vide","cpu":"1× Cortex-M33-class @ 100 MHz","mhz":100,"mb":4.25,"ram":"256 KB SRAM + 4 MB pSRAM","conf":"medium","label":"LG induction range","named":null},{"cat":"kitchen","vendor":"Samsung","sku":"Samsung Bespoke 4-Door Flex Refrigerator (29 cu. ft.) with AI Family Hub+ and AI Vision Inside","cpu":"6 cores @ 1.8 GHz","mhz":10800,"mb":3072,"ram":"3 GB DDR","conf":"medium","label":"Samsung Bespoke fridge","named":"Samsung Bespoke fridge"}],"ramOnly":[{"cat":"streaming","vendor":"Roku","sku":"Roku Streaming Stick 4K / 4K+","mb":1024,"ram":"1 GB DDR3L","cpu":"4x Arm Cortex-A55 (clock not found)","unconf":0,"conf":"high","label":"Roku Stick 4K","named":null},{"cat":"streaming","vendor":"Roku","sku":"Roku Streaming Stick Plus (2025)","mb":1024,"ram":"1 GB LPDDR4","cpu":"4x Arm Cortex-A55 (clock not found; ~20K DMIPS per androidpctv)","unconf":0,"conf":"high","label":null,"named":null},{"cat":"streaming","vendor":"Roku","sku":"Roku Streaming Stick (2025, HD)","mb":512,"ram":"512 MB DDR3L","cpu":"4x Arm Cortex-A55 per Roku dev spec (core count from the Realtek part family is not confirmed; clock not found)","unconf":0,"conf":"high","label":null,"named":null},{"cat":"streaming","vendor":"Apple","sku":"Apple TV 4K (4th gen, 2026)","mb":8192,"ram":"8 GB (launch report)","cpu":"not found (Apple claims up to 50% faster than A15)","unconf":0,"conf":"medium","label":null,"named":null},{"cat":"speaker","vendor":"Amazon","sku":"Echo Dot (5th Gen)","mb":512,"ram":"512 MB LPDDR4X-class","cpu":"not found","unconf":0,"conf":"high","label":"Echo Dot","named":"Amazon Echo Dot"},{"cat":"speaker","vendor":"Apple","sku":"HomePod mini","mb":1024,"ram":"1 GB LPDDR4","cpu":"64-bit dual-core Apple CPU (clock not published)","unconf":0,"conf":"high","label":null,"named":null},{"cat":"speaker","vendor":"Apple","sku":"HomePod (2nd Gen)","mb":1024,"ram":"1 GB LPDDR4X","cpu":"64-bit dual-core Apple CPU (clock not published)","unconf":0,"conf":"high","label":null,"named":null},{"cat":"camera","vendor":"Ring (Amazon)","sku":"Ring Peephole Cam","mb":128,"ram":"128 MB DDR3","cpu":"Arm Cortex-A5 (main) plus 32-bit RISC MCU (clock not given)","unconf":0,"conf":"high","label":"Ring Peephole","named":null},{"cat":"camera","vendor":"TP-Link (Tapo)","sku":"Tapo C100 (hardware v5)","mb":64,"ram":"64 MB","cpu":"MIPS32 XBurst1 (clock not verified)","unconf":0,"conf":"medium","label":null,"named":null},{"cat":"thermostat","vendor":"ecobee (Generac)","sku":"ecobee Smart Thermostat Premium","mb":512,"ram":"512 MB DDR3L","cpu":"not found","unconf":0,"conf":"high","label":null,"named":null},{"cat":"vacuum","vendor":"Roborock","sku":"Roborock S8 Pro Ultra","mb":1024,"ram":"1 GB DDR4 (variant 2: 512 MB)","cpu":"4 cores (robotinfo: 'MR813 (4x)'); MR813 is 4x Cortex-A53 per Allwinner; clock not found","unconf":0,"conf":"high","label":"Roborock S8 Pro Ultra","named":"Roborock S8 Pro Ultra"},{"cat":"vacuum","vendor":"Roborock","sku":"Roborock Q Revo","mb":256,"ram":"256 MB","cpu":"4 cores (robotinfo: 'R16 (4x)'); R16 is 4x Cortex-A7 per Allwinner; clock not found","unconf":0,"conf":"high","label":null,"named":null},{"cat":"vacuum","vendor":"Roborock","sku":"Roborock S7 MaxV","mb":1024,"ram":"1 GB DDR4","cpu":"4x Cortex-A55 (robotinfo: 'JA308 (4xA55)'); clock not found","unconf":0,"conf":"high","label":null,"named":null},{"cat":"vacuum","vendor":"Roborock","sku":"Roborock Saros 10","mb":2048,"ram":"2 GB DDR4","cpu":"8x Arm Cortex-A55 (clock not confirmed; ~2.0 GHz per agent, unsourced) + RISC-V E906 management core","unconf":0,"conf":"high","label":null,"named":null},{"cat":"vacuum","vendor":"Ecovacs","sku":"Ecovacs Deebot X2 Omni","mb":2048,"ram":"2 GB DDR4","cpu":"4 cores (robotinfo: 'X3M (4x)'); X3M is 4x Cortex-A53 per Horizon; clock not found","unconf":0,"conf":"high","label":"Deebot X2 Omni","named":null},{"cat":"vacuum","vendor":"Ecovacs","sku":"Ecovacs Deebot X5 Omni","mb":512,"ram":"512 MB","cpu":"4 cores (robotinfo: 'RK3326 (4x)'); RK3326 is 4x Cortex-A35 per Rockchip; clock not found","unconf":0,"conf":"high","label":null,"named":null},{"cat":"vacuum","vendor":"Ecovacs","sku":"Ecovacs Deebot T30 (Omni)","mb":512,"ram":"512 MB","cpu":"4 cores (robotinfo: 'RK3326 (4x)'); RK3326 is 4x Cortex-A35 per Rockchip; clock not found","unconf":0,"conf":"high","label":null,"named":null},{"cat":"vacuum","vendor":"Dreame","sku":"Dreame X40 Ultra","mb":1024,"ram":"1 GB","cpu":"4 cores (robotinfo: 'MR813 (4x)'); MR813 is 4x Cortex-A53 per Allwinner; clock not found","unconf":0,"conf":"high","label":null,"named":null},{"cat":"vacuum","vendor":"Dreame","sku":"Dreame L10s Pro Ultra Heat","mb":1024,"ram":"1 GB","cpu":"4 cores (robotinfo: 'MR813 (4x)'); MR813 is 4x Cortex-A53 per Allwinner; clock not found","unconf":0,"conf":"high","label":null,"named":null},{"cat":"watch","vendor":"Apple","sku":"Apple Watch Series 12 / Ultra 4","mb":4096,"ram":"4 GB (Xcode-derived)","cpu":"not found (core count/clock not published)","unconf":0,"conf":"medium","label":null,"named":null},{"cat":"watch","vendor":"Apple","sku":"Apple Watch Series 11","mb":2048,"ram":"2 GB (Xcode-derived)","cpu":"2x 64-bit Apple CPU cores (\"Sawtooth\" efficiency cores, A-series derived); clock not disclosed","unconf":0,"conf":"medium","label":"Apple Watch S11","named":null},{"cat":"watch","vendor":"Apple","sku":"Apple Watch Ultra 3","mb":2048,"ram":"2 GB (Xcode-derived)","cpu":"2x 64-bit Apple CPU cores (\"Sawtooth\" efficiency cores, A-series derived); clock not disclosed","unconf":0,"conf":"medium","label":null,"named":null},{"cat":"watch","vendor":"Apple","sku":"Apple Watch Series 10","mb":2048,"ram":"2 GB","cpu":"2x 64-bit Apple CPU cores (\"Sawtooth\" efficiency cores, A-series derived); clock not disclosed","unconf":0,"conf":"medium","label":null,"named":null},{"cat":"earbuds","vendor":"Xiaomi (incl. Redmi)","sku":"Xiaomi Buds 5 Pro","mb":10.6,"ram":"10.6 MB on-chip (platform figure)","cpu":"not published (DSPs 2x 500 MHz + 1x 250 MHz per S7 brief)","unconf":1,"conf":"medium","label":null,"named":null},{"cat":"earbuds","vendor":"Samsung (incl. Harman/JBL)","sku":"Samsung Galaxy Buds3 Pro","mb":8.3,"ram":"8.3 MB SRAM (BES2800BP; variant not confirmed)","cpu":"multi-core Arm (BES2800BP: dual-core Cortex-M55 per CNX/TechInsights; Buds3 Pro variant not confirmed)","unconf":1,"conf":"medium","label":"Galaxy Buds3 Pro","named":null},{"cat":"mower","vendor":"Segway Navimow (Willand / Ninebot)","sku":"Segway Navimow i-series (i105N / i110N) with VisionFence","mb":2048,"ram":"2 GB LPDDR4","cpu":"4x Arm Cortex-A53 (up to 1.6 GHz per sibling R818/A133 datasheet; not confirmed for MR813)","unconf":0,"conf":"medium","label":"Navimow i","named":null}],"cpuOnly":[{"cat":"speaker","vendor":"Google","sku":"Google Nest Mini (2nd Gen)","mhz":5600,"cpu":"4× Cortex-A53 @ 1.4 GHz (reported, not verified)","ram":"Nanya NT5CC128M16JR DDR3L (2 Gbit = 256 MB per chip; chip count not stated, see notes)","unconf":1,"conf":"medium","label":"Nest Mini","named":null},{"cat":"camera","vendor":"Blink (Amazon)","sku":"Blink XT2 (reference predecessor platform)","mhz":800,"cpu":"4 cores @ 200 MHz","ram":"not found","unconf":0,"conf":"medium","label":null,"named":null},{"cat":"camera","vendor":"TP-Link (Tapo)","sku":"Tapo C200 (hardware v2)","mhz":1500,"cpu":"1× MIPS32 XBurst1 @ 1.5 GHz","ram":"In-package DDR2 on T31 (64 MB or 128 MB depending on variant; exact variant not stated)","unconf":0,"conf":"medium","label":"Tapo C200","named":"Tapo C200 camera"},{"cat":"lighting","vendor":"Signify (Philips Hue / WiZ)","sku":"Philips Hue Bridge (v2, square)","mhz":600,"cpu":"1× MIPS32 @ 600 MHz","ram":"not found (conflicting: Hueblog says 16 MB, Mighty Gadget says 256 MB)","unconf":0,"conf":"medium","label":null,"named":null},{"cat":"plug","vendor":"Xiaomi","sku":"Xiaomi Mi Smart Plug (Wi-Fi) EU / IMILAB 16A","mhz":160,"cpu":"1× Tensilica L106 @ 160 MHz (inferred)","ram":"not found (ESP8266EX has ~80 KB user DRAM)","unconf":1,"conf":"low","label":null,"named":null},{"cat":"hub","vendor":"Home Assistant (Nabu Casa)","sku":"Home Assistant Yellow","mhz":6000,"cpu":"4× Cortex-A72 @ 1.5 GHz","ram":"depends on module fitted: up to 8 GB with CM4; CM5 kits 2-16 GB","unconf":0,"conf":"medium","label":null,"named":null},{"cat":"earbuds","vendor":"Samsung (incl. Harman/JBL)","sku":"Samsung Galaxy Buds FE","mhz":600,"cpu":"2 cores @ up to 300 MHz","ram":"on-chip SRAM (size not published); no external RAM","unconf":0,"conf":"high","label":null,"named":null},{"cat":"videobar","vendor":"HP Poly","sku":"Studio X52","mhz":17300,"cpu":"1× A77 @ 2.84 + 3× A77 @ 2.42 + 4× A55 @ 1.8 GHz","ram":"not found","unconf":0,"conf":"low","label":"Poly Studio X52","named":null},{"cat":"videobar","vendor":"Yealink","sku":"MeetingBar A20","mhz":18280,"cpu":"4× A75-class @ 2.8 + 4× A55-class @ 1.77 GHz","ram":"not found","unconf":0,"conf":"medium","label":"Yealink A20","named":null},{"cat":"videobar","vendor":"Yealink","sku":"MeetingBar A30","mhz":18280,"cpu":"4× A75-class @ 2.8 + 4× A55-class @ 1.77 GHz","ram":"not found","unconf":0,"conf":"medium","label":null,"named":null},{"cat":"mower","vendor":"Mammotion","sku":"Mammotion LUBA 2 AWD (UltraSense AI Vision)","mhz":4800,"cpu":"4× Cortex-A53 @ 1.2 GHz","ram":"1x LPDDR4/4X x32 package (size unreadable; X3M max 4 GB)","unconf":0,"conf":"medium","label":"LUBA 2","named":null},{"cat":"tv","vendor":"TCL","sku":"TCL QM7K (QD-Mini LED, 2025)","mhz":5600,"cpu":"4× Cortex-A73 @ 1.4 GHz (if MT9653)","ram":"not found","unconf":1,"conf":"low","label":"TCL QM7K","named":null},{"cat":"tv","vendor":"Hisense","sku":"Hisense U8 (2025, Mini-LED ULED)","mhz":7200,"cpu":"4× Cortex-A73 @ 1.8 GHz","ram":"not found (SoC supports up to 64-bit DDR4-3200)","unconf":0,"conf":"medium","label":"Hisense U8","named":"Hisense U8 TV"},{"cat":"ptz","vendor":"PTZOptics (HuddleCamHD / ValueHD-sourced hardware)","sku":"PTZOptics Move SE (20x, NDI|HX)","mhz":600,"cpu":"1× Cortex-A7 @ 600 MHz (if Hi3516A)","ram":"not found","unconf":1,"conf":"low","label":"PTZOptics Move SE","named":null}],"total":178,"cats":{"Home networking (Wi-Fi routers / mesh)":17,"Video conferencing bars":17,"Streaming media players (sticks, boxes, dongles)":14,"Home security cameras and video doorbells":14,"Smart speakers and smart displays":12,"Smart thermostats":12,"Wearables – smartwatches":12,"Smart lighting":11,"Connected appliances":11,"Smart locks and access control":10,"Wearables – earwear":9,"Hubs and sensors":8,"Wearables – fitness bands/rings":8,"Smart TVs":7,"Smart plugs and switches":6,"Smart kitchen appliances":4,"Networked PTZ cameras":3,"Robot lawn mowers":3}};
+const ICON = {
+  router:'<rect x="2" y="9" width="12" height="5" rx="1.2"/><rect x="3.4" y="2" width="1.6" height="7.5" rx=".8"/><rect x="11" y="2" width="1.6" height="7.5" rx=".8"/>',
+  streaming:'<path fill-rule="evenodd" d="M2.5 3h11A1.5 1.5 0 0 1 15 4.5v6a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 10.5v-6A1.5 1.5 0 0 1 2.5 3Zm4 2.3v4.4L10.3 7.5Z"/><rect x="5" y="13" width="6" height="1.5" rx=".75"/>',
+  tv:'<path fill-rule="evenodd" d="M2 2.5h12A1.5 1.5 0 0 1 15.5 4v7a1.5 1.5 0 0 1-1.5 1.5H2A1.5 1.5 0 0 1 .5 11V4A1.5 1.5 0 0 1 2 2.5Zm.3 1.8v6.4h11.4V4.3Z"/><rect x="4" y="13.4" width="8" height="1.6" rx=".8"/>',
+  videobar:'<path fill-rule="evenodd" d="M1.5 5.5h13a1.5 1.5 0 0 1 1.5 1.5v2a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 9V7a1.5 1.5 0 0 1 1.5-1.5ZM8 6.3a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4Z"/><rect x="2" y="11" width="1.5" height="2.5" rx=".6"/><rect x="12.5" y="11" width="1.5" height="2.5" rx=".6"/>',
+  speaker:'<path fill-rule="evenodd" d="M5 1.5h6A1.5 1.5 0 0 1 12.5 3v10a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 13V3A1.5 1.5 0 0 1 5 1.5Zm3 6a2.6 2.6 0 1 0 0 5.2 2.6 2.6 0 0 0 0-5.2ZM8 3.2a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Z"/>',
+  lighting:'<path d="M8 1a5 5 0 0 0-3 9c.6.5 1 1.1 1 1.8V12h4v-.2c0-.7.4-1.3 1-1.8A5 5 0 0 0 8 1Z"/><rect x="6" y="12.8" width="4" height="1.3" rx=".6"/><rect x="6.6" y="14.5" width="2.8" height="1.1" rx=".5"/>',
+  plug:'<rect x="5" y="1" width="1.6" height="4.5" rx=".8"/><rect x="9.4" y="1" width="1.6" height="4.5" rx=".8"/><path d="M3 5h10v3a5 5 0 0 1-4 4.9V15H7v-2.1A5 5 0 0 1 3 8Z"/>',
+  thermostat:'<path fill-rule="evenodd" d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm0 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/><rect x="7.2" y="4.6" width="1.6" height="3.8" rx=".8"/>',
+  hub:'<path fill-rule="evenodd" d="M8 1l6 3.5v7L8 15l-6-3.5v-7Zm0 4.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8Z"/>',
+  lock:'<path fill-rule="evenodd" d="M8 1a4 4 0 0 1 4 4v2h.5c.8 0 1.5.7 1.5 1.5v5c0 .8-.7 1.5-1.5 1.5h-9c-.8 0-1.5-.7-1.5-1.5v-5C2 7.7 2.7 7 3.5 7H4V5a4 4 0 0 1 4-4Zm0 1.8A2.2 2.2 0 0 0 5.8 5v2h4.4V5A2.2 2.2 0 0 0 8 2.8Z"/>',
+  camera:'<path fill-rule="evenodd" d="M3 3h10a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm5 1.6a2.9 2.9 0 1 0 0 5.8 2.9 2.9 0 0 0 0-5.8Z"/><rect x="6" y="12.6" width="4" height="2.2" rx=".6"/>',
+  ptz:'<path fill-rule="evenodd" d="M8 1a5.5 5.5 0 1 1 0 11A5.5 5.5 0 0 1 8 1Zm0 3a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/><rect x="3" y="13" width="10" height="2" rx=".8"/>',
+  watch:'<rect x="5.2" y="1" width="5.6" height="3" rx=".6"/><rect x="5.2" y="12" width="5.6" height="3" rx=".6"/><path fill-rule="evenodd" d="M5 3.5h6A2 2 0 0 1 13 5.5v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2Zm2.3 2v3.2l2.3 1.3.6-1-1.7-1V5.5Z"/>',
+  band:'<path fill-rule="evenodd" d="M8 2a6 6 0 1 1 0 12A6 6 0 0 1 8 2Zm0 2.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Z"/><rect x="6.2" y="1.2" width="3.6" height="2.2" rx=".8"/>',
+  earbuds:'<path d="M4.5 1.5a3 3 0 0 1 3 3v1a2.5 2.5 0 0 1-1.5 2.3V14a1 1 0 0 1-2 0V7.8A3 3 0 0 1 4.5 1.5Z"/><path d="M11.5 1.5a3 3 0 0 0-3 3v1a2.5 2.5 0 0 0 1.5 2.3V14a1 1 0 0 0 2 0V7.8a3 3 0 0 0-.5-6.3Z"/>',
+  vacuum:'<path fill-rule="evenodd" d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm0 2.2a4.8 4.8 0 1 0 0 9.6 4.8 4.8 0 0 0 0-9.6Z"/><circle cx="8" cy="5.6" r="1.6"/>',
+  kitchen:'<path d="M2 6h12v1.2h-1V12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.2H2Z"/><rect x="5" y="3.8" width="6" height="1.4" rx=".7"/><rect x="7.2" y="2" width="1.6" height="2" rx=".6"/>',
+  mower:'<path d="M3 5h7l3 3.5V11H3Z"/><circle cx="5" cy="12.3" r="2"/><circle cx="11.5" cy="12.6" r="1.6"/><rect x="1" y="2" width="1.4" height="6" rx=".7" transform="rotate(-25 1.7 5)"/>'
+};
+// 10 categories on 8 hues; each device keeps the icon of its original subcategory
+const CATS = [
+  {k:'router',    name:'Wi-Fi routers / mesh',         col:'--c-router',    icons:['router']},
+  {k:'tvstream',  name:'TV & streaming',               col:'--c-streaming', icons:['streaming','tv']},
+  {k:'videobar',  name:'Enterprise videoconferencing', col:'--c-streaming', icons:['videobar','ptz']},
+  {k:'speaker',   name:'Smart speakers / displays',    col:'--c-speaker',   icons:['speaker']},
+  {k:'lightplug', name:'Lighting & plugs',             col:'--c-light',     icons:['lighting','plug','hub']},
+  {k:'thermostat',name:'Thermostats',                  col:'--c-thermo',    icons:['thermostat']},
+  {k:'security',  name:'Security & hubs',              col:'--c-hub',       icons:['camera','lock','hub']},
+  {k:'wear',      name:'Wearables',                    col:'--c-wear',      icons:['watch','band','earbuds']},
+  {k:'robot',     name:'Home robots',                  col:'--c-appl',      icons:['vacuum','mower']},
+  {k:'kitchen',   name:'Kitchen appliances',           col:'--c-appl',      icons:['kitchen']}
+];
+const CAT = Object.fromEntries(CATS.map(c=>[c.k,c]));
+const MERGE={ptz:'videobar',vacuum:'robot',mower:'robot',streaming:'tvstream',tv:'tvstream',lighting:'lightplug',plug:'lightplug',
+  watch:'wear',band:'wear',earbuds:'wear',hub:'security',lock:'security',camera:'security'};
+[DATA.points,DATA.ramOnly,DATA.cpuOnly].forEach(a=>a.forEach(p=>{p.sub=/Hue Bridge/.test(p.sku)?'hub':p.cat; p.cat=MERGE[p.cat]||p.cat}));
+const pts = DATA.points, ramOnly = DATA.ramOnly, cpuOnly = DATA.cpuOnly;
+const ALL = [...pts.map(p=>({...p,where:'Chart'})), ...ramOnly.map(p=>({...p,where:'RAM-only box'})), ...cpuOnly.map(p=>({...p,where:'Clock-only box'}))];
+const NS='http://www.w3.org/2000/svg';
+const el=(t,a={},p)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e};
+const txt=(p,a,s)=>{const e=el('text',a,p);e.textContent=s;return e};
+const fmtMem=mb=>mb>=1024?(+(mb/1024).toFixed(2))+' GB':mb>=1?(+mb.toFixed(2))+' MB':Math.round(mb*1024)+' KB';
+const fmtHz=m=>m>=1000?(+(m/1000).toFixed(2))+' GHz':m+' MHz';
+const clip=(s,n)=>s.length>n?s.slice(0,n-1)+'…':s;
+
+let active=null;
+
+let MODE='all';
+try{ if(location.hash==='#named') MODE='named'; }catch(e){}
+const inView=p=>MODE==='all'||!!p.named;
+function view(){return {pts:pts.filter(inView),ram:ramOnly.filter(inView),cpu:cpuOnly.filter(inView)}}
+
+const lg=document.getElementById('legend');
+function renderLegend(){
+  lg.textContent='';
+  const items=ALL.filter(inView);
+  CATS.forEach(c=>{
+    const n=items.filter(p=>p.cat===c.k).length; if(!n) return;
+    const b=document.createElement('button'); b.type='button'; b.id='lg-'+c.k; b.setAttribute('aria-pressed','false');
+    const subs=c.icons.filter(k=>items.some(p=>p.cat===c.k&&p.sub===k));
+    b.innerHTML=subs.map(k=>`<svg viewBox="0 0 16 16" style="fill:var(${c.col})">${ICON[k]}</svg>`).join('');
+    const s=document.createElement('span'); s.textContent=c.name; b.appendChild(s);
+    if(MODE==='all'){const nn=document.createElement('span'); nn.className='n'; nn.textContent=n; b.appendChild(nn);}
+    b.onclick=()=>{active=active===c.k?null:c.k;applyFilter()};
+    lg.appendChild(b);
+  });
+  const hint=document.createElement('span');hint.className='hint';hint.textContent='Click a category to highlight it';lg.appendChild(hint);
+}
+const nAll=ALL.length, nNamed=ALL.filter(p=>p.named).length;
+document.getElementById('m-all').textContent=`All ${nAll} devices`;
+document.getElementById('m-named').textContent=`${nNamed} familiar devices`;
+function setMode(m){
+  MODE=m; active=null;
+  document.getElementById('m-all').setAttribute('aria-selected',String(m==='all'));
+  document.getElementById('m-named').setAttribute('aria-selected',String(m==='named'));
+  renderLegend(); renderNotes(); draw();
+}
+document.getElementById('m-all').onclick=()=>setMode('all');
+document.getElementById('m-named').onclick=()=>setMode('named');
+
+function applyFilter(){
+  document.querySelectorAll('.legend button').forEach(b=>b.setAttribute('aria-pressed',String(b.id==='lg-'+active)));
+  document.querySelectorAll('.pt,.dlab').forEach(g=>g.classList.toggle('dim',!!active&&g.dataset.cat!==active));
+}
+
+// beeswarm: keep each item's axis coordinate exact; stack collisions in columns perpendicular to the axis
+function swarm(items,coord,pitch,perp=pitch){
+  // perpendicular offsets in half-steps, Euclidean spacing; labeled items go last among equal values so their label has room
+  const placed=[]; let maxK=0;
+  items.map((p,i)=>({i,a:coord(p),l:p.label?1:0})).sort((u,v)=>u.a-v.a||u.l-v.l).forEach(o=>{
+    let k=0; while(placed.some(q=>Math.hypot((q.k-k)*perp,q.a-o.a)<pitch-.5)) k+=.5;
+    placed.push({...o,k}); maxK=Math.max(maxK,k);
+  });
+  const ks=[]; placed.forEach(o=>ks[o.i]=o.k); return {ks,n:maxK+1};
+}
+
+const svg=document.getElementById('chart'), tip=document.getElementById('tip'), card=svg.parentElement;
+const X0=20,X1=25000, Y0=7/1024, Y1=12000;
+const xt=[{v:20,l:'20 MHz'},{v:100,l:'100 MHz'},{v:1000,l:'1 GHz'},{v:10000,l:'10 GHz'}];
+const yt=[16/1024,128/1024,1,8,64,512,4096].map(v=>({v,l:fmtMem(v)}));
+
+let MARKS=[];
+function mark(parent,p,x,y,S){
+  const c=CAT[p.cat]; MARKS.push({x,y,r:S/2+2.5,p});
+  const g=el('g',{class:'pt','data-cat':p.cat,tabindex:'0',transform:`translate(${x} ${y})`},parent);
+  g.setAttribute('aria-label',`${p.sku}: RAM ${p.ram}; CPU ${p.cpu}`);
+  el('circle',{r:Math.max(12,S/2+3),fill:'transparent'},g);
+  const d=el('circle',{class:'disc',r:S/2+1.5,fill:'var(--surface)',stroke:`var(${c.col})`,'stroke-width':1.5},g);
+  if(p.unconf) d.setAttribute('stroke-dasharray','2.6 2');
+  const ic=el('g',{transform:`translate(${-S*0.32} ${-S*0.32}) scale(${S*0.64/16})`,style:`fill:var(${c.col})`},g);
+  ic.innerHTML=ICON[p.sub];
+  const show=()=>{g.classList.add('hot');showTip(p,g)}, hide=()=>{g.classList.remove('hot');tip.hidden=true};
+  g.addEventListener('pointerenter',show);g.addEventListener('pointerleave',hide);
+  g.addEventListener('focus',show);g.addEventListener('blur',hide);g.addEventListener('click',show);
+}
+
+function draw(){
+  svg.textContent=''; MARKS=[];
+  const V=view(), pts=V.pts, ramOnly=V.ram, cpuOnly=V.cpu;
+  const W=Math.max(300,svg.clientWidth||card.clientWidth-16), narrow=W<560;
+  const S=narrow?12:18, pitch=S+5, gap=8;
+  const H=narrow?Math.round(W*1.7):Math.round(Math.min(780,Math.max(660,W*0.72)));
+  const m={l:narrow?46:60,r:12,t:30,b:40};
+  const L=Math.log10;
+  // solve layout: box sizes depend on scales and vice versa; two passes converge
+  const labPad=0, cpuStep=(narrow||MODE==='all')?pitch:Math.round(pitch*1.7);
+  let ramBoxW=pitch+8, cpuBoxH=pitch+8, sy, sx, rs, cs, iw, ih, px0, py1;
+  for(let pass=0;pass<3;pass++){
+    px0=m.l+ramBoxW+gap; iw=W-px0-m.r;
+    ih=H-m.t-gap-cpuBoxH-m.b; py1=m.t+ih;
+    sy=v=>m.t+ih-(L(v)-L(Y0))/(L(Y1)-L(Y0))*ih;
+    sx=v=>px0+(L(v)-L(X0))/(L(X1)-L(X0))*iw;
+    rs=swarm(ramOnly,p=>sy(p.mb),pitch); cs=swarm(cpuOnly,p=>sx(p.mhz),pitch,cpuStep);
+    ramBoxW=rs.n*pitch+8+labPad; cpuBoxH=cs.n*cpuStep+8;
+  }
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('height',H);
+  const rbx=m.l, cby=py1+gap;
+
+  // zones in plot
+  el('rect',{x:px0,y:sy(5),width:iw,height:py1-sy(5),fill:'var(--band2)'},svg);
+  el('rect',{x:px0,y:m.t,width:iw,height:sy(48)-m.t,fill:'var(--band)'},svg);
+  txt(svg,{x:px0+iw-8,y:sy(48)-8,'text-anchor':'end',class:'zone'},iw<640?'External DRAM':'External DRAM · application processors');
+  txt(svg,{x:px0+iw-8,y:sy(5)+16,'text-anchor':'end',class:'zone'},iw<640?'On-chip SRAM':'On-chip SRAM · microcontrollers');
+
+  // side boxes
+  el('rect',{x:rbx,y:m.t,width:ramBoxW,height:ih,rx:6,fill:'var(--boxfill)',stroke:'var(--axis)','stroke-dasharray':'3 3'},svg);
+  el('rect',{x:px0,y:cby,width:iw,height:cpuBoxH,rx:6,fill:'var(--boxfill)',stroke:'var(--axis)','stroke-dasharray':'3 3'},svg);
+  txt(svg,{x:rbx,y:m.t-10,class:'boxlab'},`RAM only · ${ramOnly.length}`);
+  const cl=txt(svg,{x:px0-gap,y:cby+cpuBoxH/2-2,'text-anchor':'end',class:'boxlab'},'Clock');
+  txt(svg,{x:px0-gap,y:cby+cpuBoxH/2+11,'text-anchor':'end',class:'boxlab'},`only · ${cpuOnly.length}`);
+
+  // grid + ticks (span boxes so box values read off the same scale)
+  (narrow?xt.slice(1):xt).forEach(t=>{const x=sx(t.v);el('line',{x1:x,x2:x,y1:m.t,y2:cby+cpuBoxH,stroke:'var(--grid)'},svg);
+    txt(svg,{x,y:cby+cpuBoxH+15,'text-anchor':'middle',class:'tick'},t.l)});
+  yt.forEach(t=>{const y=sy(t.v);el('line',{x1:rbx,x2:px0+iw,y1:y,y2:y,stroke:'var(--grid)'},svg);
+    txt(svg,{x:rbx-6,y:y+4,'text-anchor':'end',class:'tick'},t.l)});
+  el('line',{x1:px0,x2:px0+iw,y1:py1,y2:py1,stroke:'var(--axis)'},svg);
+  el('line',{x1:px0,x2:px0,y1:m.t,y2:py1,stroke:'var(--axis)'},svg);
+  txt(svg,narrow?{x:W-m.r,y:H-6,'text-anchor':'end',class:'axlab'}:{x:px0+iw/2,y:H-6,'text-anchor':'middle',class:'axlab'},narrow?'CPU (cores × clock) →':'Aggregate CPU clock (cores × clock) →');
+  txt(svg,{transform:`translate(12 ${m.t+ih/2}) rotate(-90)`,'text-anchor':'middle',class:'axlab'},'RAM →');
+
+  // side-box marks
+  ramOnly.forEach((p,i)=>mark(svg,p,rbx+4+pitch/2+rs.ks[i]*pitch,sy(p.mb),S));
+  cpuOnly.forEach((p,i)=>mark(svg,p,sx(p.mhz),cby+4+pitch/2+cs.ks[i]*cpuStep,S));
+
+  // main plot: relax overlapping markers apart, each held near its true position
+  const pos=pts.map((p,i)=>{const a=(i*2.399963)%(2*Math.PI);return [sx(p.mhz)+Math.cos(a)*.5,sy(p.mb)+Math.sin(a)*.5]});
+  const home=pts.map(p=>[sx(p.mhz),sy(p.mb)]), minD=S+4;
+  for(let it=0;it<240;it++){
+    for(let i=0;i<pos.length;i++)for(let j=i+1;j<pos.length;j++){
+      const dx=pos[j][0]-pos[i][0], dy=pos[j][1]-pos[i][1], d=Math.hypot(dx,dy)||.01;
+      if(d<minD){const f=(minD-d)/2/d;pos[i][0]-=dx*f;pos[i][1]-=dy*f;pos[j][0]+=dx*f;pos[j][1]+=dy*f}
+    }
+    pos.forEach((q,i)=>{q[0]+=(home[i][0]-q[0])*.04;q[1]+=(home[i][1]-q[1])*.04;
+      q[0]=Math.min(px0+iw-S/2-2,Math.max(px0+S/2+2,q[0]));q[1]=Math.min(py1-S/2-2,Math.max(m.t+S/2+2,q[1]))});
+  }
+  // tick at each true position, joined to its marker when displaced
+  pts.forEach((p,i)=>{const [hx,hy]=home[i],[x,y]=pos[i];
+    if(Math.hypot(x-hx,y-hy)>S/2) el('line',{x1:hx,y1:hy,x2:x,y2:y,stroke:`var(${CAT[p.cat].col})`,'stroke-width':1,opacity:.55},svg);
+    el('circle',{cx:hx,cy:hy,r:1.6,fill:`var(${CAT[p.cat].col})`},svg)});
+  pts.map((p,i)=>i).sort((a,b)=>pts[b].mhz-pts[a].mhz).forEach(i=>mark(svg,pts[i],pos[i][0],pos[i][1],S));
+  placeLabels(W,H,narrow);
+  applyFilter();
+}
+
+// ---- labels: greedy placement around each labeled marker, avoiding marks, text and other labels
+function placeLabels(W,H,narrow){
+  const fs=narrow?9.5:11;
+  const obst=[];
+  const rectOf=b=>({x0:b.x-1,y0:b.y-1,x1:b.x+b.width+1,y1:b.y+b.height+1});
+  svg.querySelectorAll('text').forEach(tn=>{try{obst.push(rectOf(tn.getBBox()))}catch(e){}});
+  MARKS.forEach(m=>obst.push({x0:m.x-m.r,y0:m.y-m.r,x1:m.x+m.r,y1:m.y+m.r}));
+  const hit=(a,b)=>a.x0<b.x1&&a.x1>b.x0&&a.y0<b.y1&&a.y1>b.y0;
+  const layer=el('g',{class:'labels'},svg), lines=el('g',{},layer), texts=el('g',{},layer);
+  const todo=MODE==='named'?MARKS.filter(m=>m.p.named):[];
+  todo.forEach(m=>m.dens=MARKS.filter(o=>Math.hypot(o.x-m.x,o.y-m.y)<60).length);
+  todo.sort((a,b)=>b.dens-a.dens);
+  const angles=[0,180,-30,30,150,-150,-60,60,-120,120,-90,90].map(a=>a*Math.PI/180);
+  todo.forEach(m=>{
+    const p=m.p, tn=el('text',{class:'dlab','font-size':fs},texts);
+    const t1=el('tspan',{},tn); t1.textContent=p.named;
+    const t2=el('tspan',{class:'dsub','font-size':fs-1.5},tn);
+    t2.textContent=`${p.mb==null?'RAM ?':fmtMem(p.mb)} · ${p.mhz==null?'clock ?':fmtHz(p.mhz)}`;
+    const tw=Math.max(t1.getComputedTextLength(),t2.getComputedTextLength()), th=fs*2+2;
+    let best=null;
+    outer: for(const rad of [m.r+4,m.r+14,m.r+26,44,62,84,110,140,175]){
+      for(const a of angles){
+        const px=m.x+Math.cos(a)*rad, py=m.y+Math.sin(a)*rad, c=Math.cos(a);
+        const x0=c>0.3?px:c<-0.3?px-tw:px-tw/2;
+        const y0=Math.sin(a)>0.5?py:Math.sin(a)<-0.5?py-th:py-th/2;
+        const r={x0:x0-2,y0:y0-1,x1:x0+tw+2,y1:y0+th+1};
+        if(r.x0<2||r.x1>W-2||r.y0<2||r.y1>H-2) continue;
+        if(obst.some(o=>hit(o,r))) continue;
+        best={r,x0,y0,rad};break outer;
+      }
+    }
+    if(!best){tn.remove();return}
+    obst.push(best.r);
+    t1.setAttribute('x',best.x0); t1.setAttribute('y',best.y0+fs-1); t2.setAttribute('x',best.x0); t2.setAttribute('y',best.y0+fs*2);
+    tn.setAttribute('data-cat',m.p.cat);
+    if(best.rad>m.r+4){
+      // leader from marker edge to nearest point of the label box
+      const qx=Math.max(best.r.x0,Math.min(m.x,best.r.x1)), qy=Math.max(best.r.y0,Math.min(m.y,best.r.y1));
+      const d=Math.hypot(qx-m.x,qy-m.y)||1;
+      el('line',{x1:m.x+(qx-m.x)/d*m.r,y1:m.y+(qy-m.y)/d*m.r,x2:qx,y2:qy,stroke:'var(--ink-2)','stroke-width':.8,opacity:.7},lines);
+    }
+  });
+}
+function showTip(p,g){
+  tip.textContent='';
+  const add=(cls,s,par=tip)=>{const d=document.createElement('div');d.className=cls;d.textContent=s;par.appendChild(d);return d};
+  add('t1',p.sku); add('t2',p.vendor+' · '+CAT[p.cat].name);
+  const rows=[['RAM',p.mb==null?clip('Unknown: '+p.ram,90):p.ram],['CPU',p.mhz==null?clip('Unknown: '+p.cpu,90):p.cpu]];
+  if(p.mhz!=null) rows.push(['Aggregate',fmtHz(p.mhz)]);
+  if(p.unconf) rows.push(['Note','Value not confirmed for this device']);
+  rows.push(['Confidence',p.conf]);
+  rows.forEach(([k,v])=>{const r=add('row','');add('k',k,r);add('v',v,r)});
+  tip.hidden=false;
+  const gb=g.getBoundingClientRect(), cb=card.getBoundingClientRect(), tw=tip.offsetWidth, th=tip.offsetHeight;
+  const x=gb.left+gb.width/2-cb.left, y=gb.top+gb.height/2-cb.top;
+  let left=x+16; if(left+tw>cb.width-4) left=x-tw-16; left=Math.max(4,left);
+  let top=y-th/2; top=Math.max(4,Math.min(top,cb.height-th-4));
+  tip.style.left=left+'px'; tip.style.top=top+'px';
+}
+let rt;new ResizeObserver(()=>{clearTimeout(rt);rt=setTimeout(draw,80)}).observe(card);
+
+// notes
+const notes=document.getElementById('notes');
+function renderNotes(){
+  notes.textContent='';
+  const neither=DATA.total-ALL.length;
+  const list = MODE==='all' ? [
+   [`${DATA.total} devices in the dataset.`,` ${pts.length} have both figures and sit in the chart. ${ramOnly.length} have RAM but no clock speed (left box); ${cpuOnly.length} have a clock speed but no RAM size (bottom box). The other ${neither} have neither, or have conflicting or unconfirmed values for both.`],
+   ['Dashed rings',' mark a value the dataset gives conditionally: inferred, reported but unverified, or tied to an unconfirmed chip.'],
+   ['Overlaps.',' Overlapping icons are pushed apart; a small dot marks each device’s true position, with a line to its icon when it moved. In the boxes, devices with the same value sit side by side.'],
+   ['Judgment calls.',' Archer BE550 uses its v1 hardware (4× A73 @ 2.2 GHz); Apple TV 4K (3rd gen) uses EveryMac’s 5-core ~2.9 GHz estimate; Amazon Smart Thermostat uses its main MCU’s 128 KB, excluding the ESP32 Wi-Fi chip; the LG range counts its 4 MB pSRAM. Rows with a range or conflict on one figure (Tapo C200 RAM, Hue Bridge v2 RAM, Home Assistant Yellow RAM, Apple Watch SE 3 RAM) are treated as unknown on that figure.']
+  ] : [
+   [`${nNamed} familiar devices`,` from the full set of ${nAll}, chosen to span the categories. Each is a mass-market model from one of the top-ranked vendors in its category. Devices in the boxes have only one of the two figures.`],
+   ['Same scales',' as the full chart, so positions compare directly.']
+  ];
+  list.forEach(([b,tx])=>{const p=document.createElement('p');const s=document.createElement('b');s.textContent=b;p.appendChild(s);p.appendChild(document.createTextNode(tx));notes.appendChild(p)});
+}
+
+// table
+document.getElementById('tcount').textContent=ALL.length;
+const tb=document.querySelector('#tbl tbody');
+const ord=k=>CATS.findIndex(c=>c.k===k);
+[...ALL].sort((a,b)=>ord(a.cat)-ord(b.cat)||(b.mb??-1)-(a.mb??-1)||(b.mhz??0)-(a.mhz??0)).forEach(p=>{
+  const tr=document.createElement('tr');
+  [CAT[p.cat].name,p.vendor+' '+p.sku,p.where,p.mhz==null?'—':p.cpu,p.mb==null?'—':p.ram,p.mhz==null?'—':fmtHz(p.mhz),p.conf].forEach((v,i)=>{const td=document.createElement('td');td.textContent=v;if(i===5)td.className='num';tr.appendChild(td)});
+  tb.appendChild(tr);
+});
+setMode(MODE);
+</script>
+
+</body>
+</html>
